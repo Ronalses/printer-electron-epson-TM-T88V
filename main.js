@@ -4,12 +4,17 @@ const {app, BrowserWindow, ipcMain} = require('electron')
 // Keep a global reference of the window object, if you don't, the window will
 // be closed automatically when the JavaScript object is garbage collected.
 let mainWindow
-let printerWindow
+
+/**
+ * Obtener todas las impresoras
+ * Obtener impresora por defecto
+ * Imprimir
+ * Obtener estatus de la impresion
+ */
 
 function createWindow () {
   // Create the browser window.
   mainWindow = new BrowserWindow({width: 800, height: 600})
-  printerWindow = new BrowserWindow({width: 800, height: 600, show: false });
 
   // printerWindow.once('ready-to-show', () => printerWindow.hide())  
 
@@ -19,11 +24,6 @@ function createWindow () {
   // Open the DevTools. name :"EPSON TM-T88V Receipt"
   // mainWindow.webContents.openDevTools()
 
-  // Emitted when the window is closed.
-  mainWindow.webContents.on('did-finish-load', ()=> {
-    mainWindow = null;
-  })
-
   mainWindow.on('closed', function () {
     // Dereference the window object, usually you would store windows
     // in an array if your app supports multi windows, this is the time
@@ -32,16 +32,43 @@ function createWindow () {
   })
 }
 
-ipcMain.on('getPrinters', (event)=> {
-  // event.sender.send('res-printers', mainWindow.webContents.getPrinters())
+/**
+ * Get default printer
+ * @return PrinterInfo
+ */
+ipcMain.on('getDetaultPrinter', (event)=> {
+  event.sender.send('res-getDetaultPrinter', getDefaultPrinter(mainWindow.webContents.getPrinters()))
 })
 
-ipcMain.on('print', (event, htmlContent)=> {
-    printerWindow.loadURL('data:text/html;charset=UTF-8,' + encodeURIComponent(htmlContent))
-    printerWindow.webContents.on('did-finish-load', () => {
-      printerWindow.webContents.print({printBackground: false, deviceName: "EPSON TM-T88V Receipt", silent: false });
-      console.log('imprimiendo')
-    });
+
+/**
+ * Este metodo usa el metodo print silence para imprimir en la impresora por defecto
+ * 
+ */
+ipcMain.on('print', (event, arrHtmlContents)=> {
+    if (arrHtmlContents.length < 1) return
+    
+    let counterPrints = 0
+    let printingInfoArr = []
+
+    for (let htmlContent of arrHtmlContents) {
+      let printerWindow = new BrowserWindow({width: 800, height: 600, show: false });
+      printerWindow.loadURL('data:text/html;charset=UTF-8,' + encodeURIComponent(htmlContent))
+      printerWindow.webContents.on('did-finish-load', () => {
+          printerWindow.webContents.print({printBackground: false, silent: true }, (status)=> {
+            counterPrints++
+            printingInfoArr.push({
+              statusOfPrint: status,
+              numOfPrint: counterPrints,
+              statusOfPrinter: getDefaultPrinter(printerWindow.webContents.getPrinters()).status
+            })
+            if (counterPrints === arrHtmlContents.length) {
+              event.sender.send('res-print', printingInfoArr)
+            }
+            printerWindow.close()
+          })
+      })
+    }
 })
 
 // This method will be called when Electron has finished
@@ -66,5 +93,14 @@ app.on('activate', function () {
   }
 })
 
-// In this file you can include the rest of your app's specific main process
-// code. You can also put them in separate files and require them here.
+/**
+ *  return printer deafult
+ * @param webContents.getPrinters arrPrinters 
+ */
+function getDefaultPrinter(arrPrinters){
+  for (let printer of arrPrinters) {
+    if (printer.isDefault) {
+      return printer
+    }
+  }
+}

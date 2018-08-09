@@ -3,15 +3,24 @@
 // All of the Node.js APIs are available in this process.
 const {ipcRenderer} = require('electron')
 
-ipcRenderer.send('getPrinters')
-
-document.querySelector('#form').addEventListener('submit', (e)=> {
+document.querySelector('#form').addEventListener('submit', async (e)=> {
     e.preventDefault()
+    // Obtener la impresora actual
+    let currentPrinter = await getDetaultPrinter()
+
+    // check if the printer is disconect
+    if (currentPrinter.status === 4096) {
+        printerIsNotConect()
+        return
+    } else if((currentPrinter.status !== 0)) {
+        printerIsnotAvaliable()
+        return
+    }
+
     let title = document.getElementById('title').value
     let name = document.getElementById('name').value
     let numbers = document.getElementById('numbers').value
 
-    console.log(title, name, numbers)
     let htmlBoleto = `
     <!DOCTYPE html>
         <html>
@@ -117,14 +126,43 @@ document.querySelector('#form').addEventListener('submit', (e)=> {
         </body>
         </html>
 `
-    imprimir(htmlBoleto)
+    let arrHtml = [htmlBoleto]
+    
+    /**
+     * returns the data from the printed files
+     */
+    imprimir(arrHtml).then(resData=> {
+        console.log(resData)
+    })
+
+    // reset value of form
     e.target.reset()
 })
 
-function imprimir(htmlBoleto){
-    ipcRenderer.send('print', htmlBoleto)
+function imprimir(arrHtml){
+    console.log(arrHtml instanceof Array)
+    if (!(arrHtml instanceof Array)) throw 'Este argumento debe ser un Array'
+    ipcRenderer.send('print', arrHtml)
+    return new Promise((resolve, reject) => {
+        ipcRenderer.on('res-print',(event, arg) => {
+            console.log(arg)
+        })
+    })
 }
 
-ipcRenderer.on('res-printers', (event, arg)=> {
-    console.log(arg)
-})
+function getDetaultPrinter(){
+    ipcRenderer.send('getDetaultPrinter')
+    return new Promise((resolve, reject)=> {
+        ipcRenderer.on('res-getDetaultPrinter', (event, arg)=> {
+            resolve(arg)
+        })
+    })
+}
+
+function printerIsnotAvaliable(){
+    alert('La impresora esta ocupada')
+}
+
+function printerIsNotConect(){
+    alert('La impresora esta desconectada') 
+}
