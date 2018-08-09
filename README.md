@@ -1,4 +1,4 @@
-# electron-quick-start
+# printer-electron-epson-TM-T88V
 
 **Electron Epson-TM-T88V**
 
